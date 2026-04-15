@@ -186,4 +186,10 @@ router.delete('/gestiones/:id', async (req, res) => {
   res.status(204).send();
 });
 
+// ─── GET /api/me/documentos ───────────────────────────────────────────────────
+// Equivale a: obtenerDocumentos()
+router.get('/documentos', async (_req, res) => {
+  res.json([]);
+});
+
 module.exports = router;

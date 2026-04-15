@@ -175,6 +175,29 @@ router.put('/:id/devolucion', async (req, res) => {
   res.json(data);
 });
 
+// PUT /api/transacciones/:id/fechas — editar fechas de recogida y devolución prevista
+router.put('/:id/fechas', async (req, res) => {
+  const { fecha_inicio, fecha_fin_prevista } = req.body;
+
+  const updates = {};
+  if (fecha_inicio !== undefined)      updates.fecha_inicio = fecha_inicio;
+  if (fecha_fin_prevista !== undefined) updates.fecha_fin_prevista = fecha_fin_prevista;
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Se requiere al menos fecha_inicio o fecha_fin_prevista' });
+  }
+
+  const { data, error } = await supabase
+    .from('detalle_alquiler')
+    .update(updates)
+    .eq('transaccion_id', req.params.id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // PUT /api/transacciones/:id/pago — actualizar estado de pago
 router.put('/:id/pago', async (req, res) => {
   const { estado_pago } = req.body;
