@@ -18,12 +18,34 @@ async function getClienteId(email) {
   return data.id;
 }
 
+// ─── GET /api/me/imagen ───────────────────────────────────────────────────────
+router.get('/imagen', async (req, res) => {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('imagen')
+    .eq('email', req.userEmail)
+    .single();
+
+  if (error) return res.status(404).json({ error: 'Cliente no encontrado' });
+  if (!data.imagen) return res.status(404).json({ error: 'El cliente no tiene imagen' });
+
+  const buffer = Buffer.from(data.imagen, 'base64');
+  const mime = buffer[0] === 0xFF && buffer[1] === 0xD8 ? 'image/jpeg'
+             : buffer[0] === 0x89 && buffer[1] === 0x50 ? 'image/png'
+             : buffer[0] === 0x47 && buffer[1] === 0x49 ? 'image/gif'
+             : buffer[0] === 0x52 && buffer[1] === 0x49 ? 'image/webp'
+             : 'application/octet-stream';
+
+  res.set('Content-Type', mime);
+  res.send(buffer);
+});
+
 // ─── GET /api/me/cliente ──────────────────────────────────────────────────────
 // Equivale a: obtenerCliente()
 router.get('/cliente', async (req, res) => {
   const { data, error } = await supabase
     .from('clientes')
-    .select('nombre, apellidos')
+    .select('id, nombre, apellidos')
     .eq('email', req.userEmail)
     .single();
 
@@ -103,8 +125,8 @@ router.get('/gestiones', async (req, res) => {
     return {
       id: t.id,
       tipo: t.tipo_transaccion,
-      fecha: dt.toISOString().split('T')[0],
-      hora: dt.toTimeString().slice(0, 5),
+      fecha: dt.toISOString().slice(0, 10),
+      hora: dt.toISOString().slice(11, 16),
       matriculaRelacionada: t.coches?.matricula ?? '',
     };
   });

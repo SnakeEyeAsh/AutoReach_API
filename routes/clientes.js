@@ -3,7 +3,7 @@ const multer  = require('multer');
 const supabase = require('../lib/supabase');
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function detectMimeType(buffer) {
   if (buffer[0] === 0xFF && buffer[1] === 0xD8) return 'image/jpeg';
@@ -60,11 +60,14 @@ router.get('/:id/transacciones', async (req, res) => {
 
 // POST /api/clientes
 router.post('/', async (req, res) => {
-  const { dni_nif, nombre, apellidos, telefono, email, direccion } = req.body;
+  const { dni_nif, nombre, apellidos, telefono, email, direccion, fecha_registro } = req.body;
+
+  const insertData = { dni_nif, nombre, apellidos, telefono, email, direccion };
+  if (fecha_registro) insertData.fecha_registro = fecha_registro;
 
   const { data, error } = await supabase
     .from('clientes')
-    .insert({ dni_nif, nombre, apellidos, telefono, email, direccion })
+    .insert(insertData)
     .select()
     .single();
 
@@ -74,7 +77,7 @@ router.post('/', async (req, res) => {
 
 // PUT /api/clientes/:id
 router.put('/:id', async (req, res) => {
-  const campos = ['nombre', 'apellidos', 'telefono', 'email', 'direccion'];
+  const campos = ['nombre', 'apellidos', 'telefono', 'email', 'direccion', 'fecha_registro'];
   const updates = Object.fromEntries(
     campos.filter(c => req.body[c] !== undefined).map(c => [c, req.body[c]])
   );

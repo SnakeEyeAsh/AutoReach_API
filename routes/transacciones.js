@@ -7,7 +7,8 @@ const TRANSACCION_SELECT = `
   id, tipo_transaccion, fecha_transaccion, monto_total, estado_pago,
   coche:coches(vin, matricula, color, modelo:modelos(nombre, marca:marcas(nombre))),
   cliente:clientes(id, nombre, apellidos, dni_nif, email),
-  empleado:empleados(id, nombre, puesto)
+  agente:agentes(id, nombre, apellidos),
+  detalle_alquiler(id, fecha_inicio, fecha_fin_prevista, fecha_entrega_real, kilometraje_salida, kilometraje_entrada, fianza_depositada, notas_estado_entrega)
 `;
 
 // GET /api/transacciones
@@ -48,6 +49,7 @@ router.get('/:id', async (req, res) => {
       .eq('transaccion_id', req.params.id)
       .single();
 
+    console.log('[DEBUG FECHAS]', detalle?.fecha_inicio, detalle?.fecha_fin_prevista);
     return res.json({ ...transaccion, detalle_alquiler: detalle || null });
   }
 
@@ -56,18 +58,21 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/transacciones/venta
 router.post('/venta', async (req, res) => {
-  const { vin_coche, cliente_id, empleado_id, monto_total, estado_pago } = req.body;
+  const { vin_coche, cliente_id, empleado_id, agente_id, monto_total, estado_pago } = req.body;
+
+  const ventaData = {
+    tipo_transaccion: 'VENTA',
+    vin_coche,
+    cliente_id,
+    agente_id: agente_id ?? null,
+    monto_total,
+    estado_pago: estado_pago || 'Pendiente',
+  };
+  if (empleado_id != null) ventaData.empleado_id = empleado_id;
 
   const { data, error } = await supabase
     .from('transacciones')
-    .insert({
-      tipo_transaccion: 'VENTA',
-      vin_coche,
-      cliente_id,
-      empleado_id,
-      monto_total,
-      estado_pago: estado_pago || 'Pendiente',
-    })
+    .insert(ventaData)
     .select(TRANSACCION_SELECT)
     .single();
 
@@ -90,26 +95,30 @@ router.post('/venta', async (req, res) => {
 // POST /api/transacciones/alquiler
 router.post('/alquiler', async (req, res) => {
   const {
-    vin_coche, cliente_id, empleado_id, monto_total, estado_pago,
+    vin_coche, cliente_id, empleado_id, agente_id, monto_total, estado_pago,
     fecha_inicio, fecha_fin_prevista, kilometraje_salida, fianza_depositada, notas_estado_entrega,
   } = req.body;
 
   // Crear la transacción
+  const alquilerData = {
+    tipo_transaccion: 'ALQUILER',
+    vin_coche,
+    cliente_id,
+    agente_id: agente_id ?? null,
+    monto_total,
+    estado_pago: estado_pago || 'Pendiente',
+  };
+  if (empleado_id != null) alquilerData.empleado_id = empleado_id;
+
   const { data: transaccion, error: tErr } = await supabase
     .from('transacciones')
-    .insert({
-      tipo_transaccion: 'ALQUILER',
-      vin_coche,
-      cliente_id,
-      empleado_id,
-      monto_total,
-      estado_pago: estado_pago || 'Pendiente',
-    })
+    .insert(alquilerData)
     .select()
     .single();
 
   if (tErr) return res.status(500).json({ error: tErr.message });
 
+  console.log('[DEBUG INSERT] fecha_inicio:', fecha_inicio, '| fecha_fin_prevista:', fecha_fin_prevista);
   // Crear el detalle del alquiler
   const { data: detalle, error: dErr } = await supabase
     .from('detalle_alquiler')
@@ -178,6 +187,8 @@ router.put('/:id/devolucion', async (req, res) => {
 // PUT /api/transacciones/:id/fechas — editar fechas de recogida y devolución prevista
 router.put('/:id/fechas', async (req, res) => {
   const { fecha_inicio, fecha_fin_prevista } = req.body;
+
+  console.log('[DEBUG FECHAS] id:', req.params.id, '| fecha_inicio:', fecha_inicio, '| fecha_fin_prevista:', fecha_fin_prevista);
 
   const updates = {};
   if (fecha_inicio !== undefined)      updates.fecha_inicio = fecha_inicio;

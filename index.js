@@ -6,7 +6,9 @@ const catalogosRouter     = require('./routes/catalogos');
 const cochesRouter        = require('./routes/coches');
 const clientesRouter      = require('./routes/clientes');
 const empleadosRouter     = require('./routes/empleados');
+const agentesRouter       = require('./routes/agentes');
 const transaccionesRouter = require('./routes/transacciones');
+const documentosRouter    = require('./routes/documentos');
 const meRouter            = require('./routes/me');
 
 const app = express();
@@ -20,8 +22,10 @@ app.use('/api', catalogosRouter);
 app.use('/api/coches',        cochesRouter);
 app.use('/api/clientes',      clientesRouter);
 app.use('/api/empleados',     empleadosRouter);
+app.use('/api/agentes',       agentesRouter);
 app.use('/api/transacciones', transaccionesRouter);
-app.use('/api/me',           meRouter);
+app.use('/api/documentos',   documentosRouter);
+app.use('/api/me',            meRouter);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

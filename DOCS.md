@@ -12,9 +12,10 @@ Guía de migración para reemplazar llamadas directas a Supabase por llamadas a 
 4. [Coches](#4-coches)
 5. [Clientes](#5-clientes)
 6. [Empleados](#6-empleados)
-7. [Transacciones](#7-transacciones)
-8. [Catálogos](#8-catálogos)
-9. [Tabla de migración rápida](#9-tabla-de-migración-rápida)
+7. [Agentes](#7-agentes)
+8. [Transacciones](#8-transacciones)
+9. [Catálogos](#9-catálogos)
+10. [Tabla de migración rápida](#10-tabla-de-migración-rápida)
 
 ---
 
@@ -426,7 +427,8 @@ Historial de transacciones de un cliente.
     "monto_total": 25000,
     "estado_pago": "Pagado",
     "coche": { "vin": "...", "matricula": "1234ABC", "color": "Blanco", "modelo": { "nombre": "Corolla", "marca": { "nombre": "Toyota" } } },
-    "empleado": { "id": 1, "nombre": "Ana Martínez" }
+    "empleado": { "id": 1, "nombre": "Ana Martínez" },
+    "agente": { "id": 2, "nombre": "Carlos", "apellidos": "Ruiz" }
   }
 ]
 ```
@@ -558,7 +560,103 @@ Actualiza datos. Campos: `nombre`, `puesto`, `email`, `activo`.
 
 ---
 
-## 7. Transacciones
+## 7. Agentes
+
+Gestión de agentes externos que pueden estar asociados a transacciones.
+
+> **Columnas requeridas en la tabla `agentes` (ejecutar en Supabase):**
+> ```sql
+> ALTER TABLE agentes
+> ADD COLUMN username VARCHAR(100) UNIQUE NOT NULL,
+> ADD COLUMN password_hash VARCHAR(255) NOT NULL;
+> ```
+
+---
+
+### `POST /api/agentes/login`
+
+Autentica un agente y devuelve un JWT propio (distinto al JWT de Supabase).
+
+**Body:**
+| Campo | Tipo | Requerido |
+|---|---|---|
+| `username` | `string` | Sí |
+| `password` | `string` | Sí |
+
+**Respuesta:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "agente": {
+    "id": 1,
+    "nombre": "Carlos",
+    "apellidos": "Ruiz",
+    "email": "carlos@agencia.com",
+    "activo": true
+  }
+}
+```
+
+El token tiene validez de **8 horas**. Inclúyelo en peticiones protegidas:
+```
+Authorization: Bearer <token>
+```
+
+**Errores:**
+| Código | Motivo |
+|---|---|
+| `400` | Falta `username` o `password` |
+| `401` | Credenciales incorrectas |
+| `403` | Cuenta desactivada (`activo = false`) |
+
+> **Nota de seguridad:** nunca guardes la contraseña en texto plano. Usa `bcrypt.hash(password, 10)` al crear o actualizar el agente.
+
+---
+
+### `GET /api/agentes`
+
+Lista agentes. Filtro opcional por estado activo.
+
+```
+GET /api/agentes?activo=true
+GET /api/agentes?activo=false
+```
+
+---
+
+### `GET /api/agentes/:id`
+
+Detalle de un agente. `HTTP 404` si no existe.
+
+---
+
+### `POST /api/agentes`
+
+Crea un agente.
+
+**Body:**
+| Campo | Tipo | Requerido |
+|---|---|---|
+| `nombre` | `string` | Sí |
+| `apellidos` | `string` | No |
+| `email` | `string` | No (único) |
+| `telefono` | `string` | No |
+
+---
+
+### `PUT /api/agentes/:id`
+
+Actualiza datos. Campos: `nombre`, `apellidos`, `email`, `telefono`, `activo`.
+
+---
+
+### `DELETE /api/agentes/:id`
+
+**Baja lógica** — pone `activo = false` y devuelve el agente actualizado (`HTTP 200`).
+
+---
+
+## 8. Transacciones
 
 ---
 
@@ -612,6 +710,7 @@ Registra una venta. Automáticamente cambia el estado del coche a `"Vendido"`.
 | `vin_coche` | `string` | Sí |
 | `cliente_id` | `number` | Sí |
 | `empleado_id` | `number` | Sí |
+| `agente_id` | `number` | No (puede ser `null`) |
 | `monto_total` | `number` | Sí |
 | `estado_pago` | `string` | No (default: `"Pendiente"`) |
 
@@ -624,6 +723,7 @@ Registra un alquiler. Automáticamente cambia el estado del coche a `"Alquilado"
 **Body:** todo lo de venta más:
 | Campo | Tipo | Requerido |
 |---|---|---|
+| `agente_id` | `number` | No (puede ser `null`) |
 | `fecha_inicio` | `string` (`YYYY-MM-DD`) | Sí |
 | `fecha_fin_prevista` | `string` (`YYYY-MM-DD`) | Sí |
 | `kilometraje_salida` | `number` | Sí |
