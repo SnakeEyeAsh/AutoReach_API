@@ -13,6 +13,44 @@ function detectMimeType(buffer) {
   return 'application/octet-stream';
 }
 
+// POST /api/clientes/login
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'email y password son requeridos' });
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    return res.status(401).json({ error: 'Credenciales incorrectas' });
+  }
+
+  const { data: cliente, error: clienteError } = await supabase
+    .from('clientes')
+    .select('id, nombre, apellidos, email, dni_nif, telefono, direccion')
+    .eq('email', email)
+    .single();
+
+  if (clienteError || !cliente) {
+    return res.status(403).json({ error: 'No tienes acceso como cliente' });
+  }
+
+  res.json({ token: data.session.access_token, cliente });
+});
+
+// POST /api/clientes/registrar-auth
+router.post('/registrar-auth', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email requerido' });
+
+  const { error } = await supabase.auth.admin.inviteUserByEmail(email);
+  if (error) return res.status(400).json({ error: error.message });
+
+  res.json({ ok: true });
+});
+
 // GET /api/clientes
 router.get('/', async (req, res) => {
   const { search } = req.query;
