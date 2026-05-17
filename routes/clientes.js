@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const multer  = require('multer');
+const { createClient } = require('@supabase/supabase-js');
 const supabase = require('../lib/supabase');
 
 const router = Router();
@@ -16,26 +17,25 @@ function detectMimeType(buffer) {
 // POST /api/clientes/login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
+  if (!email || !password)
     return res.status(400).json({ error: 'email y password son requeridos' });
-  }
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const tempClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+    auth: { persistSession: false }
+  });
 
-  if (error) {
+  const { data, error } = await tempClient.auth.signInWithPassword({ email, password });
+  if (error)
     return res.status(401).json({ error: 'Credenciales incorrectas' });
-  }
 
   const { data: cliente, error: clienteError } = await supabase
     .from('clientes')
     .select('id, nombre, apellidos, email, dni_nif, telefono, direccion')
-    .eq('email', email)
+    .ilike('email', email)
     .single();
 
-  if (clienteError || !cliente) {
+  if (clienteError || !cliente)
     return res.status(403).json({ error: 'No tienes acceso como cliente' });
-  }
 
   res.json({ token: data.session.access_token, cliente });
 });
@@ -45,25 +45,91 @@ router.post('/registrar-auth', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'email requerido' });
 
+  const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+    redirectTo: 'https://raid-el-martinez.com/api/clientes/confirmar'
+  });
+  if (error) return res.status(400).json({ error: error.message });
+
+  res.json({ ok: true });
+});
+
+// GET /api/clientes/confirmar — página que recibe el enlace del email
+router.get('/confirmar', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Activación de cuenta</title>
+  <style>
+    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
+    .card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
+    .dni { font-size: 1.5rem; font-weight: bold; color: #333; background: #f0f0f0; padding: 0.5rem 1rem; border-radius: 4px; margin: 1rem 0; letter-spacing: 2px; }
+    .error { color: #e53e3e; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="content">Activando tu cuenta...</div>
+  </div>
+  <script>
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hash.get('access_token');
+    if (!accessToken) {
+      document.getElementById('content').innerHTML = '<p class="error">Enlace inválido o expirado.</p>';
+    } else {
+      fetch('/api/clientes/confirmar-dni', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.dni) {
+          document.getElementById('content').innerHTML =
+            '<h2>Cuenta activada</h2>' +
+            '<p>Tu contraseña de acceso es tu DNI:</p>' +
+            '<div class="dni">' + data.dni + '</div>' +
+            '<p>Ya puedes iniciar sesión en la app.</p>';
+        } else {
+          document.getElementById('content').innerHTML = '<p class="error">Error: ' + (data.error || 'desconocido') + '</p>';
+        }
+      })
+      .catch(() => {
+        document.getElementById('content').innerHTML = '<p class="error">Error de conexión.</p>';
+      });
+    }
+  </script>
+</body>
+</html>`);
+});
+
+// POST /api/clientes/confirmar-dni — establece la contraseña como el DNI
+router.post('/confirmar-dni', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Token requerido' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+
   const { data: cliente, error: clienteError } = await supabase
     .from('clientes')
-    .select('dni_nif')
-    .eq('email', email)
+    .select('id, dni_nif')
+    .ilike('email', user.email)
     .single();
 
   if (clienteError || !cliente) {
     return res.status(404).json({ error: 'Cliente no encontrado' });
   }
 
-  const { error } = await supabase.auth.admin.createUser({
-    email,
-    password: cliente.dni_nif,
-    email_confirm: true
+  const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+    password: cliente.dni_nif
   });
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (updateError) return res.status(500).json({ error: updateError.message });
 
-  res.json({ ok: true });
+  res.json({ dni: cliente.dni_nif });
 });
 
 // GET /api/clientes
