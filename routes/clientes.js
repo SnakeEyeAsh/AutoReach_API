@@ -45,7 +45,22 @@ router.post('/registrar-auth', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'email requerido' });
 
-  const { error } = await supabase.auth.admin.inviteUserByEmail(email);
+  const { data: cliente, error: clienteError } = await supabase
+    .from('clientes')
+    .select('dni_nif')
+    .eq('email', email)
+    .single();
+
+  if (clienteError || !cliente) {
+    return res.status(404).json({ error: 'Cliente no encontrado' });
+  }
+
+  const { error } = await supabase.auth.admin.createUser({
+    email,
+    password: cliente.dni_nif,
+    email_confirm: true
+  });
+
   if (error) return res.status(400).json({ error: error.message });
 
   res.json({ ok: true });
